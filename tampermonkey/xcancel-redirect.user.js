@@ -1,0 +1,24 @@
+// ==UserScript==
+// @name         X to xcancel redirect
+// @namespace    https://github.com/brodieve/utilities
+// @version      1.0.0
+// @description  Redirect x.com and twitter.com URLs to xcancel.com
+// @author       Brodie
+// @homepageURL  https://github.com/brodieve/utilities
+// @supportURL   https://github.com/brodieve/utilities/issues
+// @downloadURL  https://raw.githubusercontent.com/brodieve/utilities/main/tampermonkey/xcancel-redirect.user.js
+// @updateURL    https://raw.githubusercontent.com/brodieve/utilities/main/tampermonkey/xcancel-redirect.user.js
+// @icon         https://xcancel.com/favicon.ico
+// @match        https://x.com/*
+// @match        https://twitter.com/*
+// @run-at       document-start
+// @noframes
+// @grant        none
+// ==/UserScript==
+
+(function () {
+    'use strict';
+    const url = new URL(window.location.href);
+    const newUrl = 'https://xcancel.com' + url.pathname + url.search + url.hash;
+    window.location.replace(newUrl);
+})();
