@@ -1,0 +1,123 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/brodieve/utilities/detection-coverage/ledger.schema.json",
+  "title": "Coverage Ledger",
+  "type": "object",
+  "required": ["run", "failure_modes", "signals", "coverage"],
+  "additionalProperties": false,
+  "properties": {
+    "run": {
+      "type": "object",
+      "required": ["id", "timestamp", "target"],
+      "properties": {
+        "id": {"type": "string"},
+        "timestamp": {"type": "string"},
+        "target": {"type": "string"},
+        "target_commit": {"type": "string"},
+        "adapters_used": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "kind", "name", "source_refs"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^AS-[a-z0-9-]+$"},
+          "kind": {"enum": ["endpoint", "datastore", "credential", "job", "external_dep", "trust_boundary", "queue", "service"]},
+          "name": {"type": "string"},
+          "description": {"type": "string"},
+          "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}}
+        }
+      }
+    },
+    "failure_modes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "title", "category", "source_refs", "severity", "confidence"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^FM-[a-z0-9-]+$"},
+          "title": {"type": "string"},
+          "description": {"type": "string"},
+          "category": {"enum": ["authz", "data_integrity", "availability", "supply_chain", "misconfig", "secrets", "fraud", "abuse"]},
+          "assets": {"type": "array", "items": {"type": "string", "pattern": "^AS-[a-z0-9-]+$"}},
+          "attack_narrative": {"type": "string"},
+          "provenance": {"enum": ["threat_model", "design_doc_assumption", "design_doc", "code_inference", "prior_run", "human"]},
+          "source_refs": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+          "severity": {"enum": ["critical", "high", "medium", "low", "info"]},
+          "confidence": {"enum": ["high", "medium", "low"]},
+          "status": {"enum": ["active", "drifted", "stale"]}
+        }
+      }
+    },
+    "log_sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "type", "status"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^LS-[a-z0-9-]+$"},
+          "name": {"type": "string"},
+          "type": {"enum": ["cloudwatch_log_group", "cloudtrail", "vpc_flow", "app_json", "k8s_audit", "saas_audit", "wiz", "metric", "other"]},
+          "status": {"enum": ["present", "absent", "proposed"]},
+          "fields": {"type": "array", "items": {"type": "string"}},
+          "source_refs": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "signals": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "failure_mode", "posture", "observable", "detection_class", "telemetry", "fidelity"],
+        "properties": {
+          "id": {"type": "string", "pattern": "^SIG-[a-z0-9-]+$"},
+          "failure_mode": {"type": "string", "pattern": "^FM-[a-z0-9-]+$"},
+          "posture": {"enum": ["leading", "lagging"]},
+          "observable": {"type": "string"},
+          "detection_class": {"enum": ["threshold", "anomaly_baseline", "sequence", "absence_of_expected", "allowlist_violation", "config_drift"]},
+          "telemetry": {
+            "type": "object",
+            "required": ["source_id", "fields", "exists"],
+            "properties": {
+              "source_id": {"type": "string", "pattern": "^LS-[a-z0-9-]+$"},
+              "fields": {"type": "array", "items": {"type": "string"}},
+              "exists": {"type": "boolean"}
+            }
+          },
+          "detection_logic": {"type": "string"},
+          "fidelity": {"enum": ["high", "medium", "low"]},
+          "tuning_knob": {"type": "string"},
+          "time_to_detect": {"type": "string"}
+        }
+      }
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["signal_id", "status"],
+        "properties": {
+          "signal_id": {"type": "string", "pattern": "^SIG-[a-z0-9-]+$"},
+          "status": {"enum": ["covered", "partial", "uncovered", "unobservable"]},
+          "existing_control": {"type": "string"},
+          "gap_reason": {"type": "string"}
+        }
+      }
+    },
+    "outputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["path", "adapter", "signal_ids"],
+        "properties": {
+          "path": {"type": "string"},
+          "adapter": {"type": "string"},
+          "signal_ids": {"type": "array", "items": {"type": "string"}},
+          "human_edited": {"type": "boolean"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,133 @@
+run:
+  id: run-002
+  timestamp: '2026-08-29T00:00:00Z'
+  target: price-oracle
+  adapters_used:
+  - codebase
+  - design-doc
+  - panther
+  - instrumentation
+assets:
+- id: AS-price-feed-1a2b
+  kind: external_dep
+  name: Exchange price feed
+  source_refs:
+  - src/feed.py:12
+failure_modes:
+- id: FM-stale-exchange-price-9f3c
+  title: Oracle trades on a stale or manipulated exchange price
+  category: data_integrity
+  provenance: design_doc_assumption
+  source_refs:
+  - docs/design/oracle.md#assumptions
+  severity: high
+  confidence: high
+  status: active
+- id: FM-poller-silently-dead-77aa
+  title: Price poller stops running without error
+  category: availability
+  provenance: code_inference
+  source_refs:
+  - src/feed.py:22
+  severity: high
+  confidence: medium
+  status: active
+- id: FM-creds-in-logs-1234
+  title: Exchange API credentials leak via logs
+  category: secrets
+  provenance: threat_model
+  source_refs:
+  - docs/threat-model.md#t-03
+  severity: medium
+  confidence: high
+  status: stale
+- id: FM-signing-key-misuse-5e6f
+  title: Signing key used by an unintended principal
+  category: authz
+  provenance: design_doc
+  source_refs:
+  - docs/design/oracle.md#signing
+  severity: high
+  confidence: high
+  status: active
+log_sources:
+- id: LS-price-poller-4d5e
+  name: /aws/lambda/price-poller
+  type: cloudwatch_log_group
+  status: present
+  fields:
+  - pair
+  - exchange
+  - price
+  - ts
+  - event
+  - status
+- id: LS-signer-0000
+  name: signer (none)
+  type: app_json
+  status: absent
+  fields: []
+signals:
+- id: SIG-price-divergence-aaaa
+  failure_mode: FM-stale-exchange-price-9f3c
+  posture: leading
+  observable: One exchange deviates more than 2 percent from the cross-venue median.
+  detection_class: anomaly_baseline
+  telemetry:
+    source_id: LS-price-poller-4d5e
+    fields:
+    - pair
+    - exchange
+    - price
+    exists: true
+  detection_logic: Median across exchanges per 60s bucket; alert on >2% deviation twice running.
+  fidelity: medium
+- id: SIG-poller-heartbeat-bbbb
+  failure_mode: FM-poller-silently-dead-77aa
+  posture: leading
+  observable: No poll_complete event in 15 minutes on a 5 minute schedule.
+  detection_class: absence_of_expected
+  telemetry:
+    source_id: LS-price-poller-4d5e
+    fields:
+    - event
+    - status
+    exists: true
+  fidelity: medium
+  detection_logic: Zero poll_complete events in three consecutive 5 minute periods.
+- id: SIG-creds-in-logs-cccc
+  failure_mode: FM-creds-in-logs-1234
+  posture: lagging
+  observable: A log line contains something shaped like an exchange API key.
+  detection_class: allowlist_violation
+  telemetry:
+    source_id: LS-price-poller-4d5e
+    fields:
+    - message
+    exists: true
+  fidelity: low
+- id: SIG-signing-key-use-dddd
+  failure_mode: FM-signing-key-misuse-5e6f
+  posture: leading
+  observable: Any use of the signing key by a principal outside the allowlist.
+  detection_class: allowlist_violation
+  telemetry:
+    source_id: LS-signer-0000
+    fields:
+    - caller
+    - key_id
+    exists: false
+  fidelity: high
+coverage:
+- signal_id: SIG-price-divergence-aaaa
+  status: covered
+  gap_reason: Existing alarms cover poller errors only.
+  existing_control: detections/panther/price_divergence.py
+- signal_id: SIG-poller-heartbeat-bbbb
+  status: uncovered
+  gap_reason: Error-rate alarm cannot distinguish zero errors from zero runs.
+- signal_id: SIG-creds-in-logs-cccc
+  status: uncovered
+- signal_id: SIG-signing-key-use-dddd
+  status: unobservable
+  gap_reason: src/signer.py logs nothing at all.

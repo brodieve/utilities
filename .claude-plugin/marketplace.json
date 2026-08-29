@@ -1,0 +1,14 @@
+{
+  "name": "brodieve-utilities",
+  "owner": {
+    "name": "brodieve",
+    "url": "https://github.com/brodieve/utilities"
+  },
+  "plugins": [
+    {
+      "name": "detection-coverage",
+      "source": "./plugins/detection-coverage",
+      "description": "Maps what can go wrong in an application to the signals that would reveal it, then generates Panther, CloudWatch, Wiz and instrumentation artifacts to close the gaps."
+    }
+  ]
+}
