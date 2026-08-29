@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hacker News Claude dark theme
 // @namespace    https://github.com/brodieve/utilities
-// @version      1.0.0
+// @version      1.0.1
 // @description  Dark theme for news.ycombinator.com using Claude's dark mode palette
 // @author       Brodie
 // @homepageURL  https://github.com/brodieve/utilities
@@ -209,9 +209,16 @@ td[bgcolor="#ff6600" i] { background-color: rgba(217, 119, 87, 0.45) !important;
     // At document-start neither <head> nor even <html> is guaranteed to exist yet,
     // so attach to whichever appears first and watch for it if there is nothing.
     const install = () => {
-        const root = document.head || document.documentElement;
+        const root = document.documentElement;
         if (!root) return false;
-        root.appendChild(style);
+
+        // Paint the root inline before attaching the sheet. The canvas colour is
+        // read off the root element, so this darkens the page as soon as <html>
+        // exists, without waiting on the sheet to be parsed or on cascade order.
+        root.style.setProperty('color-scheme', 'dark', 'important');
+        root.style.setProperty('background-color', '#1f1e1d', 'important');
+
+        (document.head || root).appendChild(style);
         return true;
     };
 
