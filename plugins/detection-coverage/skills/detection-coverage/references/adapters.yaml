@@ -1,0 +1,68 @@
+# Adapter registry.
+#
+# This file is the plugin contract. To add an adapter, write its reference file and add an
+# entry here - nothing in SKILL.md changes. Read only the adapters enabled by the target
+# repo's detection-coverage.yaml.
+
+inputs:
+  - id: codebase
+    ref: inputs/codebase.md
+    produces: [assets, failure_modes, log_sources]
+    summary: Walks source to find trust boundaries, authz checks, state-mutating paths,
+      external dependencies, secret handling and scheduled jobs. Also inventories every
+      existing log statement, since those define what is observable today.
+
+  - id: design-doc
+    ref: inputs/design-doc.md
+    produces: [assets, failure_modes]
+    summary: Reads design and architecture documents for components, data flows and -
+      most valuably - stated assumptions, each of which is a failure mode when violated.
+
+  - id: threat-model
+    ref: inputs/threat-model.md
+    produces: [failure_modes]
+    summary: Ingests an existing threat model (STRIDE table, attack tree, or prose) and
+      converts entries directly at high confidence.
+
+  - id: signal-inventory
+    ref: inputs/signal-inventory.md
+    produces: [log_sources, existing_controls]
+    summary: Ingests what already exists - Panther rule directories, CloudWatch alarm
+      exports, Wiz control exports, hand-maintained YAML - so reconciliation can tell a
+      real gap from an already-solved problem.
+
+outputs:
+  - id: panther
+    ref: outputs/panther.md
+    serves_classes: [sequence, allowlist_violation, anomaly_baseline, threshold, absence_of_expected]
+    serves_sources: [cloudwatch_log_group, cloudtrail, app_json, k8s_audit, saas_audit, vpc_flow]
+    summary: Python detection rule plus YAML metadata and rule_tests fixtures.
+
+  - id: cloudwatch
+    ref: outputs/cloudwatch.md
+    serves_classes: [threshold, absence_of_expected]
+    serves_sources: [cloudwatch_log_group, metric]
+    summary: Log metric filter plus metric alarm, rendered as Terraform, with the raw
+      filter pattern alongside.
+
+  - id: wiz
+    ref: outputs/wiz.md
+    serves_classes: [config_drift, allowlist_violation]
+    serves_sources: [wiz, cloudtrail]
+    summary: Cloud configuration audit control - resource type, expected-state predicate,
+      severity and remediation.
+
+  - id: instrumentation
+    ref: outputs/instrumentation.md
+    serves_classes: [threshold, anomaly_baseline, sequence, absence_of_expected, allowlist_violation, config_drift]
+    serves_sources: ["*"]
+    selector: telemetry.exists == false
+    summary: The application change required before any rule is possible - structured event
+      schema, the file:line where it belongs, a patch sketch, and the rule it unblocks.
+
+  - id: report
+    ref: outputs/report.md
+    serves_classes: ["*"]
+    serves_sources: ["*"]
+    always: true
+    summary: Human-readable coverage report and PR body, including the run delta.

@@ -1,0 +1,40 @@
+target:
+  name: price-oracle
+  root: .
+
+inputs:
+  codebase:
+    enabled: true
+    include: ["src/**"]
+    exclude: ["**/test/**"]
+  design-doc:
+    enabled: true
+    paths: ["docs/design/*.md"]
+  threat-model:
+    enabled: true
+    paths: ["docs/threat-model.md"]
+  signal-inventory:
+    enabled: true
+    panther_rules: "detections/panther/"
+    cloudwatch_alarms: "inventory/cloudwatch-alarms.json"
+
+outputs:
+  panther:
+    enabled: true
+    dir: "detections/panther/"
+  cloudwatch:
+    enabled: true
+    dir: "detections/cloudwatch/"
+    format: terraform
+  wiz:
+    enabled: true
+    dir: "detections/wiz/"
+  instrumentation:
+    enabled: true
+    dir: "detections/instrumentation/"
+  report:
+    enabled: true
+    path: "detections/COVERAGE.md"
+
+ledger: "detections/ledger.yaml"
+severity_floor: medium

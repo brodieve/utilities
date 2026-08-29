@@ -1,0 +1,21 @@
+{
+  "name": "detection-coverage",
+  "displayName": "Detection Coverage",
+  "version": "0.1.0",
+  "description": "Derives failure modes from a codebase, design docs and threat models; maps each to proactive (leading) and reactive (lagging) signals; reconciles against existing monitoring; and emits Panther rules, CloudWatch metric filters and alarms, Wiz config audit rules, and app instrumentation proposals. Extensible via input and output adapters.",
+  "author": {
+    "name": "brodieve"
+  },
+  "repository": "https://github.com/brodieve/utilities",
+  "license": "Apache-2.0",
+  "keywords": [
+    "security",
+    "detection-engineering",
+    "threat-modeling",
+    "siem",
+    "panther",
+    "cloudwatch",
+    "wiz",
+    "observability"
+  ]
+}
