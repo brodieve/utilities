@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         X to xcancel redirect
+// @name         X to Nitter redirect
 // @namespace    https://github.com/brodieve/utilities
 // @version      1.1.0
-// @description  Redirect x.com and twitter.com URLs to x.tmts.ca
+// @description  Redirect x.com and twitter.com URLs to x.tmts.ca Nitter proxy instance
 // @author       Brodie
 // @homepageURL  https://github.com/brodieve/utilities
 // @supportURL   https://github.com/brodieve/utilities/issues
