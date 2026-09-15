@@ -30,7 +30,7 @@ private enum Config {
     /// native ones; tune with PASTESHOT_RESTORE_DELAY_MS.
     static var restoreDelay: TimeInterval {
         let ms = ProcessInfo.processInfo.environment["PASTESHOT_RESTORE_DELAY_MS"]
-            .flatMap(Int.init) ?? 250
+            .flatMap(Int.init) ?? 100
         return TimeInterval(ms) / 1000
     }
 
