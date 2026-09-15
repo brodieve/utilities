@@ -28,8 +28,8 @@ mkdir -p "$(dirname -- "$out")"
 # Apple silicon defaults to arm64, so x86_64 has to be asked for explicitly,
 # and swiftc takes one -target at a time. Pinning the deployment target keeps
 # an SDK bump from quietly producing a binary that will not run on macOS 13,
-# which is the floor the source needs for loadUnaligned.
-for arch in arm64 x86_64; do
+# which is the floor the source needs for loadUnaligned. (arch in arm64 x86_64)
+for arch in arm64; do
     swiftc -O -whole-module-optimization \
         -target "${arch}-apple-macos${target}" \
         -o "$work/pasteshot-$arch" \
