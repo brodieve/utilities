@@ -4,7 +4,7 @@
 #
 #     ./package.sh VERSION [binary-path]
 #
-# Writes swift/dist/pasteshot-VERSION-macos-universal.tar.gz and .sha256.
+# Writes swift/dist/pasteshot-VERSION-macos-arm64.tar.gz and .sha256.
 
 set -eu
 
@@ -17,7 +17,7 @@ if [ ! -f "$binary" ]; then
     exit 1
 fi
 
-name="pasteshot-${version}-macos-universal"
+name="pasteshot-${version}-macos-arm64"
 dist="$here/dist"
 stage="$dist/$name"
 

@@ -28,9 +28,9 @@ Grab the latest [release](https://github.com/brodieve/utilities/releases?q=paste
 — a Silicon build for macOS 13 and later:
 
 ```sh
-tar xzf pasteshot-VERSION-macos-universal.tar.gz
-cd pasteshot-VERSION-macos-universal
-shasum -a 256 -c ../pasteshot-VERSION-macos-universal.tar.gz.sha256
+tar xzf pasteshot-VERSION-macos-arm64.tar.gz
+cd pasteshot-VERSION-macos-arm64
+shasum -a 256 -c ../pasteshot-VERSION-macos-arm64.tar.gz.sha256
 xattr -d com.apple.quarantine pasteshot
 install -m 755 pasteshot /usr/local/bin/pasteshot
 ```
@@ -41,7 +41,7 @@ until the quarantine attribute is off.
 ### Build
 
 ```sh
-swift/build.sh                      # swift/build/pasteshot, universal, signed
+swift/build.sh                      # swift/build/pasteshot, arm64, signed
 swift/package.sh 1.0.0              # swift/dist/*.tar.gz + .sha256
 ```
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Builds a universal, ad-hoc signed pasteshot.
+# Builds an arm64, ad-hoc signed pasteshot.
 #
 #     ./build.sh [output-path]        # default: swift/build/pasteshot
 #
@@ -20,30 +20,22 @@ if [ "$(uname -s)" != Darwin ]; then
     exit 1
 fi
 
-work=$(mktemp -d)
-trap 'rm -rf "$work"' EXIT
-
 mkdir -p "$(dirname -- "$out")"
 
-# Apple silicon defaults to arm64, so x86_64 has to be asked for explicitly,
-# and swiftc takes one -target at a time. Pinning the deployment target keeps
-# an SDK bump from quietly producing a binary that will not run on macOS 13,
-# which is the floor the source needs for loadUnaligned. (arch in arm64 x86_64)
-for arch in arm64; do
-    swiftc -O -whole-module-optimization \
-        -target "${arch}-apple-macos${target}" \
-        -o "$work/pasteshot-$arch" \
-        "$here/pasteshot.swift"
-done
+# arm64 only: Intel Macs are past the point of being worth a second slice.
+# Pinning the deployment target keeps an SDK bump from quietly producing a
+# binary that will not run on macOS 13, which is the floor the source needs
+# for loadUnaligned.
+swiftc -O -whole-module-optimization \
+    -target "arm64-apple-macos${target}" \
+    -o "$out" \
+    "$here/pasteshot.swift"
 
-lipo -create -output "$out" "$work/pasteshot-arm64" "$work/pasteshot-x86_64"
-
-# lipo drops the per-slice signatures. Re-sign, so the binary keeps one stable
-# code identity: TCC keys the Accessibility grant to it, and an unsigned
-# rebuild is a different process as far as the permission list is concerned.
+# Sign, so the binary keeps one stable code identity: TCC keys the
+# Accessibility grant to it, and an unsigned rebuild is a different process as
+# far as the permission list is concerned.
 codesign --force --sign "$identity" --identifier com.brodieve.pasteshot "$out"
 
-# otool rather than vtool: it walks both slices of a fat binary.
 lipo -archs "$out"
 codesign --verify --verbose "$out"
 otool -l "$out" | grep -A4 LC_BUILD_VERSION

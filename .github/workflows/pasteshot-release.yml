@@ -40,7 +40,7 @@ jobs:
           set -euo pipefail
 
           version="${TAG#pasteshot-v}"
-          asset="swift/dist/pasteshot-${version}-macos-universal.tar.gz"
+          asset="swift/dist/pasteshot-${version}-macos-arm64.tar.gz"
 
           # A version with a suffix — 1.1.0-rc.1, 1.1.0-beta — is a prerelease.
           flags=''
@@ -57,12 +57,12 @@ jobs:
           fi
 
           cat > "${RUNNER_TEMP}/notes.md" <<NOTES
-          Universal (arm64 + x86_64) build for macOS 13 and later.
+          Apple silicon (arm64) build for macOS 13 and later.
 
           \`\`\`sh
-          tar xzf pasteshot-${version}-macos-universal.tar.gz
-          cd pasteshot-${version}-macos-universal
-          shasum -a 256 -c ../pasteshot-${version}-macos-universal.tar.gz.sha256
+          tar xzf pasteshot-${version}-macos-arm64.tar.gz
+          cd pasteshot-${version}-macos-arm64
+          shasum -a 256 -c ../pasteshot-${version}-macos-arm64.tar.gz.sha256
           xattr -d com.apple.quarantine pasteshot
           install -m 755 pasteshot /usr/local/bin/pasteshot
           \`\`\`
