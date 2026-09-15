@@ -13,16 +13,57 @@ file, which sends it as a named attachment rather than an inline image.
 Command-V, then restores whatever was on the clipboard before. Bind it to a
 hotkey and a screenshot pastes the way an image should.
 
+### Install
+
+Grab the latest [release](https://github.com/brodieve/utilities/releases?q=pasteshot)
+— a universal (arm64 + x86_64) build for macOS 13 and later:
+
+```sh
+tar xzf pasteshot-VERSION-macos-universal.tar.gz
+cd pasteshot-VERSION-macos-universal
+shasum -a 256 -c ../pasteshot-VERSION-macos-universal.tar.gz.sha256
+xattr -d com.apple.quarantine pasteshot
+install -m 755 pasteshot /usr/local/bin/pasteshot
+```
+
+The binary is ad-hoc signed rather than notarised, so Gatekeeper refuses it
+until the quarantine attribute is off.
+
 ### Build
+
+```sh
+swift/build.sh                      # swift/build/pasteshot, universal, signed
+swift/package.sh 1.0.0              # swift/dist/*.tar.gz + .sha256
+```
+
+Or straight from the source, as the file header says:
 
 ```sh
 swiftc -O -whole-module-optimization -o /usr/local/bin/pasteshot swift/pasteshot.swift
 ```
 
-Or take the universal binary that CI builds: the **swift** workflow compiles
-`arm64` and `x86_64` slices on every push touching `swift/`, `lipo`s them
-together, ad-hoc signs the result and uploads it as the `pasteshot-universal`
-artifact. Download it from the run's summary page.
+`build.sh` takes `DEPLOYMENT_TARGET` (default `13.0`) and `CODESIGN_IDENTITY`
+(default `-`, ad-hoc). Sign with a real Developer ID instead if you want the
+binary to survive a move between machines without re-granting Accessibility.
+
+### Releasing
+
+Two workflows, both running the scripts above so CI and releases cannot drift:
+
+- **swift** builds on every push and pull request touching `swift/`, and
+  uploads the tarball as an artifact.
+- **pasteshot release** fires on a `pasteshot-v*` tag, builds, and publishes a
+  GitHub release with the tarball and its checksum attached.
+
+```sh
+git tag pasteshot-v1.0.0
+git push origin pasteshot-v1.0.0
+```
+
+Tags are scoped per utility so a future release of something else in this repo
+cannot collide, and the generated notes are cut from the previous `pasteshot-v*`
+tag rather than from whatever was tagged last. A version with a suffix —
+`pasteshot-v1.1.0-rc.1` — is published as a prerelease.
 
 ### Usage
 

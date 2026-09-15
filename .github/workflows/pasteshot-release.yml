@@ -1,0 +1,81 @@
+name: pasteshot release
+
+# Tags are scoped per utility, so a future release of something else in this
+# repo cannot collide: pasteshot-v1.0.0, pasteshot-v1.1.0-rc.1, and so on.
+on:
+  push:
+    tags:
+      - 'pasteshot-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: publish pasteshot release
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Full history and tags, so the previous pasteshot tag can be found
+          # to scope the generated notes.
+          fetch-depth: 0
+
+      - name: Build
+        run: swift/build.sh
+
+      - name: Package
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          swift/package.sh "${TAG#pasteshot-v}"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG#pasteshot-v}"
+          asset="swift/dist/pasteshot-${version}-macos-universal.tar.gz"
+
+          # A version with a suffix — 1.1.0-rc.1, 1.1.0-beta — is a prerelease.
+          flags=''
+          case "$version" in *-*) flags='--prerelease' ;; esac
+
+          # Notes span commits since the previous pasteshot tag rather than
+          # since whatever unrelated utility was tagged last.
+          # `|| true`: on the first release grep filters out the only tag and
+          # exits 1, which pipefail would turn into a failed release.
+          previous=$(git tag --list 'pasteshot-v*' --sort=-v:refname \
+            | grep -v "^${TAG}$" | head -n 1 || true)
+          if [ -n "$previous" ]; then
+            flags="$flags --notes-start-tag $previous"
+          fi
+
+          cat > "${RUNNER_TEMP}/notes.md" <<NOTES
+          Universal (arm64 + x86_64) build for macOS 13 and later.
+
+          \`\`\`sh
+          tar xzf pasteshot-${version}-macos-universal.tar.gz
+          cd pasteshot-${version}-macos-universal
+          shasum -a 256 -c ../pasteshot-${version}-macos-universal.tar.gz.sha256
+          xattr -d com.apple.quarantine pasteshot
+          install -m 755 pasteshot /usr/local/bin/pasteshot
+          \`\`\`
+
+          The binary is ad-hoc signed, so Gatekeeper will refuse it until the
+          quarantine attribute is removed. Pasting needs Accessibility
+          permission for whichever process launches it; \`--copy-only\` does not.
+          NOTES
+
+          gh release create "$TAG" \
+            "$asset" "$asset.sha256" \
+            --title "pasteshot $version" \
+            --notes-file "${RUNNER_TEMP}/notes.md" \
+            --generate-notes \
+            --verify-tag \
+            $flags

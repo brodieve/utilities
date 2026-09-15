@@ -25,10 +25,6 @@ jobs:
     # so this cannot be cross-compiled from a Linux runner.
     runs-on: macos-latest
 
-    env:
-      # The source uses UnsafeRawPointer.loadUnaligned, which is macOS 13+.
-      DEPLOYMENT_TARGET: '13.0'
-
     steps:
       - uses: actions/checkout@v5
 
@@ -37,45 +33,18 @@ jobs:
           xcodebuild -version
           swiftc --version
 
-      - name: Compile
-        working-directory: swift
-        run: |
-          set -euo pipefail
+      # Same scripts the release workflow runs, so the packaging path is
+      # exercised on every push rather than first tried at tag time.
+      - name: Build
+        run: swift/build.sh
 
-          # Runners are Apple silicon, so x86_64 has to be asked for explicitly.
-          # Build each slice separately and lipo them together rather than
-          # passing two -target flags, which swiftc does not accept.
-          for arch in arm64 x86_64; do
-            swiftc \
-              -O -whole-module-optimization \
-              -target "${arch}-apple-macos${DEPLOYMENT_TARGET}" \
-              -o "pasteshot-${arch}" \
-              pasteshot.swift
-          done
-
-          lipo -create -output pasteshot pasteshot-arm64 pasteshot-x86_64
-          rm pasteshot-arm64 pasteshot-x86_64
-
-          # lipo drops the per-slice ad-hoc signatures. Re-sign, so the binary
-          # keeps one stable code identity: TCC keys the Accessibility grant to
-          # it, and an unsigned rebuild would be a different process as far as
-          # the permission list is concerned.
-          codesign --force --sign - --identifier com.brodieve.pasteshot pasteshot
-
-      - name: Verify
-        working-directory: swift
-        run: |
-          set -euo pipefail
-          file pasteshot
-          lipo -archs pasteshot
-          codesign --verify --verbose pasteshot
-          # otool walks both slices of a fat binary; vtool wants a thin one.
-          otool -l pasteshot | grep -A4 LC_BUILD_VERSION
+      - name: Package
+        run: swift/package.sh "dev-${GITHUB_SHA:0:7}"
 
       - name: Upload binary
         uses: actions/upload-artifact@v5
         with:
           name: pasteshot-universal
-          path: swift/pasteshot
+          path: swift/dist/*
           if-no-files-found: error
           retention-days: 90
