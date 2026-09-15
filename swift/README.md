@@ -3,20 +3,29 @@
 ## pasteshot.swift
 
 Pastes the most recent screenshot into the frontmost application as PNG image
-data, then puts the original clipboard back.
+data without clobbering the original clipboard, lightning fast.
+
+This is a native Swift app is designed for performance to execute in under 20ms
+with a compiled size of under 150kb.
+
+It includes an interal 50ms delay to give apps a chance to receive/handle ^V,
+which may be too aggressive but seems to work reliably in Slack, Linear, etc.
+
+### Background
 
 Screenshots land on the Desktop (or wherever `com.apple.screencapture location`
 points) and getting one into Slack or a browser normally means dragging the
 file, which sends it as a named attachment rather than an inline image.
 `pasteshot` finds the newest capture, writes it to the pasteboard as bare
 `public.png` data — the same thing "Copy Image" produces — synthesises
-Command-V, then restores whatever was on the clipboard before. Bind it to a
-hotkey and a screenshot pastes the way an image should.
+Command-V, then restores whatever was on the clipboard before. You can create a
+Shortcuts shortcut, potentially bind it a key, but I just map it to 'prs'
+(paste recent screenshot).
 
 ### Install
 
 Grab the latest [release](https://github.com/brodieve/utilities/releases?q=pasteshot)
-— a universal (arm64 + x86_64) build for macOS 13 and later:
+— a Silicon build for macOS 13 and later:
 
 ```sh
 tar xzf pasteshot-VERSION-macos-universal.tar.gz
@@ -74,14 +83,14 @@ pasteshot --copy-only   # copy only; no keystroke, clipboard keeps the image
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `PASTESHOT_RESTORE_DELAY_MS` | `250` | How long the image stays on the pasteboard before the previous clipboard is restored. |
-| `PASTESHOT_MODIFIER_TIMEOUT_MS` | `1000` | How long to wait for physically-held modifiers to be released before posting Command-V. |
+| `PASTESHOT_RESTORE_DELAY_MS` | `50` | How long the image stays on the pasteboard before the previous clipboard is restored. Increase if some apps don't appear to respond fast enough when you run the command  |
+| `PASTESHOT_MODIFIER_TIMEOUT_MS` | `1000` | How long to wait for physically-held modifiers to be released before posting (you should never need to adjust this) Command-V. |
 
 ### Notes
 
 - Requires macOS 13+ (`UnsafeRawPointer.loadUnaligned`).
-- Synthesising Command-V needs Accessibility permission, and the grant attaches
-  to whichever process TCC holds responsible — run from a shell or a hotkey
+- Synthesising Command-V needs Accessibility permission, and **the grant attaches
+  to whichever process TCC holds responsible** — run from a shell or a hotkey
   launcher, that is Terminal or Raycast, not this binary; launched through
   LaunchServices it needs its own grant. `--copy-only` skips the keystroke and
   therefore the permission entirely.
