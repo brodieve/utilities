@@ -1,0 +1,50 @@
+name: swift
+
+on:
+  push:
+    paths:
+      - 'swift/**'
+      - '.github/workflows/swift.yml'
+  pull_request:
+    paths:
+      - 'swift/**'
+      - '.github/workflows/swift.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pasteshot:
+    name: build pasteshot
+    # AppKit, ImageIO and the getattrlistbulk(2) attrlist layout are macOS-only,
+    # so this cannot be cross-compiled from a Linux runner.
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain versions
+        run: |
+          xcodebuild -version
+          swiftc --version
+
+      # Same scripts the release workflow runs, so the packaging path is
+      # exercised on every push rather than first tried at tag time.
+      - name: Build
+        run: swift/build.sh
+
+      - name: Package
+        run: swift/package.sh "dev-${GITHUB_SHA:0:7}"
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v5
+        with:
+          name: pasteshot-universal
+          path: swift/dist/*
+          if-no-files-found: error
+          retention-days: 90
