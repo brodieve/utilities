@@ -30,7 +30,7 @@ jobs:
       DEPLOYMENT_TARGET: '13.0'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain versions
         run: |
@@ -73,7 +73,7 @@ jobs:
           otool -l pasteshot | grep -A4 LC_BUILD_VERSION
 
       - name: Upload binary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: pasteshot-universal
           path: swift/pasteshot
