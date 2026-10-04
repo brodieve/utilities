@@ -7,6 +7,7 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showBrowser = false
     @State private var replacing: Guest?
+    @State private var removing: Guest?
 
     var body: some View {
         ZStack {
@@ -52,6 +53,7 @@ struct ContentView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(engine.state.saved) { guest in
                         GuestButton(guest: guest, isActive: isActive(guest)) { tapped(guest) }
+                            .contextMenu { removeMenu(guest) }
                             .disabled(engine.isBusy)
                     }
                 }
@@ -87,6 +89,13 @@ struct ContentView: View {
         } message: {
             Text("Only one visitor pass is allowed at a time, so the current pass will be cancelled.")
         }
+        .confirmationDialog(removeTitle, isPresented: removingBinding, titleVisibility: .visible) {
+            if let guest = removing {
+                Button("Remove \(guest.plate)", role: .destructive) { Task { await engine.remove(guest) } }
+            }
+        } message: {
+            Text("This deletes the plate from Previously Parked Plates on your Pass10x account.")
+        }
         .sheet(isPresented: $showAdd) {
             AddGuestView { guest, activateNow in
                 Task { await engine.add(guest, activate: activateNow) }
@@ -108,6 +117,28 @@ struct ContentView: View {
         } else {
             Task { await engine.activate(guest) }
         }
+    }
+
+    /// A guest with the active pass is not removed: the site might cancel the
+    /// pass along with the plate.
+    @ViewBuilder
+    private func removeMenu(_ guest: Guest) -> some View {
+        if isActive(guest) {
+            Section("Has the active pass") {
+                Button("Remove Guest", systemImage: "trash", role: .destructive) {}.disabled(true)
+            }
+        } else {
+            Button("Remove Guest", systemImage: "trash", role: .destructive) { removing = guest }
+        }
+    }
+
+    private var removeTitle: String {
+        guard let guest = removing else { return "" }
+        return "Remove \(guest.title)?"
+    }
+
+    private var removingBinding: Binding<Bool> {
+        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
     }
 
     private var replaceTitle: String {

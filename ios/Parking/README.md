@@ -4,8 +4,9 @@ An iPhone app for visitor parking passes on [Pass10x](https://www.pass10x.com).
 Each saved guest (a plate and a short name) is a button; tap one and it
 becomes the suite's active 24 hour pass, cancelling any other active pass
 first. **+** saves a new guest, and can create its pass straight away.
+Touch and hold a guest to remove it.
 
-<img src="GuestPass/Assets.xcassets/Logo.imageset/Logo.png" width="96" alt="">
+<img src="Parking/Assets.xcassets/Logo.imageset/Logo.png" width="96" alt="">
 
 ## How it works
 
@@ -24,10 +25,16 @@ resident web app, in a web view kept behind the screen:
   since only one pass is allowed per suite.
 - **+:** **Setup a Visitor Pass → Save Visitor**, then the same as a tap if
   "Create pass now" is on.
+- **Remove Guest** (touch and hold a button): after the app asks, press the
+  trash icon in that plate's row of **Previously Parked Plates** and confirm
+  the site's dialog. Only a row whose plate matches exactly is touched; if
+  there is none, or more than one, it stops with an error. A guest with the
+  active pass cannot be removed until the pass ends, so the pass is never
+  cancelled as a side effect.
 
-Saved plates are only ever added: the app never presses the trash or edit
-icons beside them. All of the page work is in
-[`GuestPass/pass10x.js`](GuestPass/pass10x.js); `PassEngine.swift` loads pages
+The app presses a saved plate's trash icon only to remove that guest, and
+never presses the edit icon. All of the page work is in
+[`Parking/pass10x.js`](Parking/pass10x.js); `PassEngine.swift` loads pages
 and calls its steps one at a time. If Pass10x changes its pages, **Settings →
 Show browser** shows where a step gets stuck.
 
@@ -42,9 +49,9 @@ Needs Xcode 15 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen):
 
 ```sh
 brew install xcodegen
-cd ios/GuestPass
+cd ios/Parking
 xcodegen
-open GuestPass.xcodeproj
+open Parking.xcodeproj
 ```
 
 Pick your team under **Signing & Capabilities** (or set `DEVELOPMENT_TEAM` in
@@ -58,13 +65,14 @@ with the same step order as the app, so changes can be checked without a
 phone:
 
 ```sh
-cd ios/GuestPass/tests
+cd ios/Parking/tests
 npm install && npx playwright install chromium
 export PASS10X_SUITE=... PASS10X_PASSWORD=...
 node run.mjs read                       # active pass and saved guests
 node run.mjs activate 769PXT --dry-run  # fill the pass form, do not submit
 node run.mjs add ABC123 Pat --dry-run   # fill Setup a Visitor Pass, do not save
+node run.mjs remove ABC123 --dry-run    # find the plate's trash icon, do not press it
 ```
 
-Without `--dry-run`, `activate` cancels the active pass and creates one, and
-`add` saves a plate on the real account.
+Without `--dry-run`, `activate` cancels the active pass and creates one,
+`add` saves a plate on the real account, and `remove` deletes one.
