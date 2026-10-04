@@ -126,3 +126,52 @@ nosleep -c 'make && say done' # one quoted argument runs in $SHELL
 - The guard is this script run as root, so anything that can write to it can
   run as root the next time you start a session. Keep it somewhere only you
   can write.
+
+## pass10x/guestpass.mjs
+
+Creates, lists and cancels visitor parking passes for a suite on
+[Pass10x](https://www.pass10x.com) (Landmark 33 by default) by driving the
+resident web app in headless Chromium with Playwright.
+
+The login has to go through the home page: pick the building, choose
+**RESIDENT**, then log in. Opening `/signin` directly skips the RESIDENT
+choice and Pass10x refuses the login.
+
+A suite may hold only one 24 hour visitor pass at a time, so `create` stops if
+another plate has one, unless `--replace` is given to cancel it first.
+Cancelling only touches the **Active Visitor Parking Passes** table; the
+saved **Previously Parked Plates** list, which deletes plates with the same
+trash icon, is never clicked.
+
+### Install
+
+```sh
+cd scripts/pass10x
+npm install
+npx playwright install chromium
+ln -s "$PWD/guestpass.mjs" ~/.local/bin/guestpass
+security add-generic-password -s pass10x -a YOUR_SUITE -w   # prompts for the password
+```
+
+### Usage
+
+```sh
+export PASS10X_SUITE=YOUR_SUITE
+guestpass create ABC123 "Pat Guest"         # 24 hour pass
+guestpass create ABC123 "Pat Guest" --replace
+guestpass create ABC123 --dry-run           # fill the form, do not submit
+guestpass list
+guestpass cancel ABC123
+```
+
+```
+  --replace    cancel the suite's active visitor pass first (one per suite)
+  --dry-run    fill in the form and stop before submitting
+  --phone N    10 digit cell number for the expiry text
+  --headed     show the browser
+  -h, --help   show help
+```
+
+`PASS10X_PASSWORD` overrides the Keychain, `PASS10X_BUILDING` the building
+search text, and `PASS10X_CHROMIUM` / `PASS10X_CHROMIUM_ARGS` the browser.
+Creating a pass for an already active plate prints it and exits 0.
