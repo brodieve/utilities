@@ -9,6 +9,7 @@
 //   node run.mjs read                    # active pass and saved plates
 //   node run.mjs activate PLATE          # cancel any other pass, create PLATE's
 //   node run.mjs add PLATE NAME          # save a new plate (does not create a pass)
+//   node run.mjs remove PLATE            # delete a saved plate with its trash icon
 //   --dry-run                            # fill the forms, stop before the last click
 //
 // Uses PASS10X_BUILDING (default "Landmark 33"), PASS10X_SUITE and
@@ -19,7 +20,7 @@ import { readFileSync } from 'node:fs';
 import { chromium } from 'playwright';
 
 const HOME = 'https://www.pass10x.com/';
-const script = readFileSync(new URL('../GuestPass/pass10x.js', import.meta.url), 'utf8');
+const script = readFileSync(new URL('../Parking/pass10x.js', import.meta.url), 'utf8');
 
 const env = {
   building: process.env.PASS10X_BUILDING || 'Landmark 33',
@@ -113,6 +114,13 @@ async function add(plate, name, dryRun) {
   return (await step('readParking')).saved;
 }
 
+async function remove(plate, dryRun) {
+  await openManage();
+  const found = await step('removeVisitor', { plate, dryRun });
+  if (dryRun) return found;
+  return (await step('readParking')).saved;
+}
+
 const norm = (s) => (s || '').replace(/[\s-]/g, '').toUpperCase();
 const dryRun = process.argv.includes('--dry-run');
 const [cmd, ...rest] = process.argv.slice(2).filter((a) => a !== '--dry-run');
@@ -121,7 +129,8 @@ try {
   if (cmd === 'read') out = await read();
   else if (cmd === 'activate') out = await activate(rest[0], dryRun);
   else if (cmd === 'add') out = await add(rest[0], rest.slice(1).join(' '), dryRun);
-  else throw new Error('usage: run.mjs read | activate PLATE | add PLATE NAME');
+  else if (cmd === 'remove') out = await remove(rest[0], dryRun);
+  else throw new Error('usage: run.mjs read | activate PLATE | add PLATE NAME | remove PLATE');
   console.log(JSON.stringify(out, null, 2));
 } catch (e) {
   console.error(e.message);

@@ -60,6 +60,16 @@ final class PassEngine: NSObject, ObservableObject {
         }
     }
 
+    /// Delete a saved plate on Pass10x with its trash icon. The JS step
+    /// refuses a plate that has the active pass.
+    func remove(_ guest: Guest) async {
+        await run("Removing \(guest.title)") {
+            try await self.openManage()
+            try await self.step("removeVisitor", ["plate": guest.plate])
+            try await self.read()
+        }
+    }
+
     private func activateSteps(_ guest: Guest) async throws {
         try await openManage()
         try await read()

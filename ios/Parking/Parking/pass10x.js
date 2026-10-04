@@ -5,9 +5,9 @@
 // functions one step at a time. A step that navigates returns as soon as it
 // has clicked; the caller then polls P10.where() until the next page is up.
 //
-// Saved plates are only ever added. The only button pressed in a saved
-// plate's row is the one labelled Create, never the trash or edit icons
-// beside it. Cancelling only touches the active visitor pass table.
+// In a saved plate's row, the buttons pressed are Create and, only when the
+// user removes that plate, its trash icon; never the edit icon. Cancelling
+// only touches the active visitor pass table.
 //
 // tests/run.mjs runs this same file against the live site in Chromium.
 
@@ -237,6 +237,64 @@
     }
   }
 
+  // The trash and edit icons beside Create are bare Material UI icons, with
+  // no label, test id or icon-specific class. Tell them apart by the icon's
+  // path, Delete versus Edit, and never by position, so the edit icon is
+  // never pressed by mistake.
+  const DELETE_ICON = 'M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z';
+
+  function trashButton(r) {
+    const trash = [...r.row.querySelectorAll('button')].filter((b) => b !== r.create
+      && [...b.querySelectorAll('svg path')].some((p) => (p.getAttribute('d') || '').startsWith(DELETE_ICON)));
+    if (trash.length !== 1) throw new Error(`expected one trash icon for ${r.plate}, found ${trash.length}`);
+    return trash[0];
+  }
+
+  // Previously Parked Plates: press one plate's trash icon. Only a row whose
+  // plate is exactly `plate` is touched, and a plate with the active pass is
+  // refused rather than risk the site cancelling the pass with it.
+  async function removeVisitor({ plate, dryRun }) {
+    await waitForManage();
+    const rows = savedRows();
+    const exact = rows.filter((r) => r.plate === plate.trim());
+    const loose = rows.filter((r) => norm(r.plate) === norm(plate));
+    if (loose.length !== 1) throw new Error(`expected one saved plate ${plate}, found ${loose.length}`);
+    if (exact.length !== 1) throw new Error(`no saved plate is exactly ${plate}; the nearest is ${loose[0].plate}`);
+    const r = exact[0];
+    const creates = [...r.row.querySelectorAll('button')].filter((b) => text(b).toLowerCase() === 'create');
+    if (creates.length !== 1) throw new Error(`the row for ${plate} holds ${creates.length} plates`);
+    if (readActive().some((p) => norm(p.plate) === norm(plate))) {
+      throw new Error(`${plate} has the active pass. Remove it once the pass has ended.`);
+    }
+    const trash = trashButton(r);
+    if (dryRun) return { dryRun: true, plate: r.plate, trash: 'Delete icon' };
+
+    const others = rows.filter((x) => x !== r).map((x) => x.plate);
+    const active = readActive().map((p) => p.plate);
+    const gone = () => !savedRows().some((x) => norm(x.plate) === norm(plate));
+    messages.length = 0;
+    trash.click();
+    // The site asks "Delete This license plate?" in its own dialog, which
+    // stays mounted and hidden like the others; wait for it to show.
+    const dialog = await until(() => [...document.querySelectorAll('[role=dialog]')]
+      .find((d) => /Delete This license plate/i.test(text(d)) && getComputedStyle(d).visibility === 'visible'),
+    `the confirmation to remove ${plate}`, 5000);
+    const confirm = [...dialog.querySelectorAll('button')].find((b) => /^confirm$/i.test(text(b)));
+    if (!confirm) throw new Error(`no Confirm button when removing ${plate}`);
+    confirm.click();
+    await until(() => gone() || /Unable to delete a Parked Plate/i.test(bodyText()), `${plate} to be removed`);
+    // The lists may refill after the delete; let them settle, then check
+    // that nothing else went with it.
+    await until(() => savedRows().length >= others.length && activeRows().length >= active.length,
+      'the lists to refill', 5000).catch(() => {});
+    if (!gone()) throw new Error(messages.join(' ') || `Pass10x did not remove ${plate}. Try again.`);
+    const lost = others.filter((p) => !savedRows().some((x) => x.plate === p));
+    if (lost.length) throw new Error(`Removing ${plate} also removed ${lost.join(', ')}.`);
+    const ended = active.filter((p) => !readActive().some((x) => x.plate === p));
+    if (ended.length) throw new Error(`Removing ${plate} also cancelled the pass for ${ended.join(', ')}.`);
+    return { messages: messages.slice() };
+  }
+
   // Press Create on a saved plate; the site opens the pass form filled in.
   async function openCreate({ plate }) {
     await waitForManage();
@@ -268,5 +326,5 @@
     clickSoon(submit);
   }
 
-  window.P10 = { where, chooseBuilding, chooseResident, submitLogin, openManage, readParking, cancelPass, saveVisitor, openCreate, submitPass };
+  window.P10 = { where, chooseBuilding, chooseResident, submitLogin, openManage, readParking, cancelPass, saveVisitor, removeVisitor, openCreate, submitPass };
 })();
