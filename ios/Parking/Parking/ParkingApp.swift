@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct GuestPassApp: App {
+struct ParkingApp: App {
     @StateObject private var engine = PassEngine()
 
     var body: some Scene {

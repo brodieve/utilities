@@ -17,6 +17,8 @@ struct ActivePass: Codable, Hashable {
     var phone: String
     var start: String
     var end: String
+
+    var title: String { name.isEmpty ? plate : name }
 }
 
 /// What Manage Parking shows, as read by P10.readParking().

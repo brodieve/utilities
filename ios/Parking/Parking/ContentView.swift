@@ -7,6 +7,8 @@ struct ContentView: View {
     @State private var showSettings = false
     @State private var showBrowser = false
     @State private var replacing: Guest?
+    @State private var removing: Guest?
+    @State private var revoking: ActivePass?
 
     var body: some View {
         ZStack {
@@ -36,7 +38,8 @@ struct ContentView: View {
     private var content: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                ActivePassCard(pass: engine.activePass)
+                ActivePassCard(pass: engine.activePass) { revoking = $0 }
+                    .disabled(engine.isBusy)
 
                 if let status = engine.status {
                     HStack(spacing: 10) {
@@ -52,6 +55,7 @@ struct ContentView: View {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 12)], spacing: 12) {
                     ForEach(engine.state.saved) { guest in
                         GuestButton(guest: guest, isActive: isActive(guest)) { tapped(guest) }
+                            .contextMenu { removeMenu(guest) }
                             .disabled(engine.isBusy)
                     }
                 }
@@ -87,6 +91,20 @@ struct ContentView: View {
         } message: {
             Text("Only one visitor pass is allowed at a time, so the current pass will be cancelled.")
         }
+        .confirmationDialog(removeTitle, isPresented: removingBinding, titleVisibility: .visible) {
+            if let guest = removing {
+                Button("Remove \(guest.plate)", role: .destructive) { Task { await engine.remove(guest) } }
+            }
+        } message: {
+            Text("This deletes the plate from Previously Parked Plates on your Pass10x account.")
+        }
+        .confirmationDialog(revokeTitle, isPresented: revokingBinding, titleVisibility: .visible) {
+            if let pass = revoking {
+                Button("Revoke Pass", role: .destructive) { Task { await engine.revoke(pass) } }
+            }
+        } message: {
+            Text("This ends the pass on Pass10x now. If the car is still parked, it may be ticketed or towed.")
+        }
         .sheet(isPresented: $showAdd) {
             AddGuestView { guest, activateNow in
                 Task { await engine.add(guest, activate: activateNow) }
@@ -110,9 +128,40 @@ struct ContentView: View {
         }
     }
 
+    /// A guest with the active pass is not removed: the site might cancel the
+    /// pass along with the plate.
+    @ViewBuilder
+    private func removeMenu(_ guest: Guest) -> some View {
+        if isActive(guest) {
+            Section("Has the active pass") {
+                Button("Remove Guest", systemImage: "trash", role: .destructive) {}.disabled(true)
+            }
+        } else {
+            Button("Remove Guest", systemImage: "trash", role: .destructive) { removing = guest }
+        }
+    }
+
+    private var removeTitle: String {
+        guard let guest = removing else { return "" }
+        return "Remove \(guest.title)?"
+    }
+
+    private var removingBinding: Binding<Bool> {
+        Binding(get: { removing != nil }, set: { if !$0 { removing = nil } })
+    }
+
+    private var revokeTitle: String {
+        guard let pass = revoking else { return "" }
+        return "Revoke \(pass.title)'s pass?"
+    }
+
+    private var revokingBinding: Binding<Bool> {
+        Binding(get: { revoking != nil }, set: { if !$0 { revoking = nil } })
+    }
+
     private var replaceTitle: String {
         guard let pass = engine.activePass else { return "" }
-        return "Replace \(pass.name.isEmpty ? pass.plate : pass.name)'s pass?"
+        return "Replace \(pass.title)'s pass?"
     }
 
     private var replacingBinding: Binding<Bool> {
@@ -120,18 +169,37 @@ struct ContentView: View {
     }
 }
 
+/// The active pass, whether or not its plate is a saved guest, with an X to
+/// revoke it.
 struct ActivePassCard: View {
     let pass: ActivePass?
+    let revoke: (ActivePass) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("ACTIVE PASS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("ACTIVE PASS").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+                if let pass {
+                    Text(pass.title).font(.title2.weight(.semibold))
+                    Text(pass.plate).font(.headline.monospaced())
+                    Text("Until \(pass.end)").foregroundStyle(.secondary)
+                } else {
+                    Text("None").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
             if let pass {
-                Text(pass.name.isEmpty ? pass.plate : pass.name).font(.title2.weight(.semibold))
-                Text(pass.plate).font(.headline.monospaced())
-                Text("Until \(pass.end)").foregroundStyle(.secondary)
-            } else {
-                Text("None").font(.title2.weight(.semibold)).foregroundStyle(.secondary)
+                Button { revoke(pass) } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 44, height: 44)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding([.top, .trailing], -10)
+                .accessibilityLabel("Revoke pass")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

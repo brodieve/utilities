@@ -60,12 +60,32 @@ final class PassEngine: NSObject, ObservableObject {
         }
     }
 
+    /// Delete a saved plate on Pass10x with its trash icon. The JS step
+    /// refuses a plate that has the active pass.
+    func remove(_ guest: Guest) async {
+        await run("Removing \(guest.title)") {
+            try await self.openManage()
+            try await self.step("removeVisitor", ["plate": guest.plate])
+            try await self.read()
+        }
+    }
+
+    /// Cancel `pass` with its delete button in Active Visitor Parking Passes.
+    /// It need not be a saved guest's: a pass made on the website works too.
+    func revoke(_ pass: ActivePass) async {
+        await run("Revoking \(pass.title)'s pass") {
+            try await self.openManage()
+            try await self.step("cancelPass", ["plate": pass.plate])
+            try await self.read()
+        }
+    }
+
     private func activateSteps(_ guest: Guest) async throws {
         try await openManage()
         try await read()
         let plate = normPlate(guest.plate)
         for pass in state.active where normPlate(pass.plate) != plate {
-            status = "Cancelling \(pass.name.isEmpty ? pass.plate : pass.name)"
+            status = "Cancelling \(pass.title)"
             try await step("cancelPass", ["plate": pass.plate])
         }
         if state.active.contains(where: { normPlate($0.plate) == plate }) {
