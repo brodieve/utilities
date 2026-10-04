@@ -9,12 +9,15 @@ settings:
     MARKETING_VERSION: "1.0"
     CURRENT_PROJECT_VERSION: "1"
     SWIFT_VERSION: "5.0"
-    # Your Apple developer team, for signing on a device.
-    DEVELOPMENT_TEAM: ""
+    # Apple developer team, for signing on a device and for TestFlight.
+    DEVELOPMENT_TEAM: 75V83JVZWU
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    STRING_CATALOG_GENERATE_SYMBOLS: YES
 targets:
-  GuestPass:
+  Parking:
     type: application
     platform: iOS
+    scheme: {}
     sources:
       - path: Parking
         excludes:
@@ -26,7 +29,13 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: io.github.brodieve.Parking
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_CFBundleDisplayName: Parking
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        # HTTPS only, through WKWebView: exempt, so TestFlight skips the question.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations: UIInterfaceOrientationPortrait
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        SUPPORTED_PLATFORMS: "iphoneos iphonesimulator"
+        SUPPORTS_MACCATALYST: NO
+        SUPPORTS_XR_DESIGNED_FOR_IPHONE_IPAD: NO
