@@ -7,6 +7,7 @@
 // can be checked (and fixed when the site changes) without a phone.
 //
 //   node run.mjs read                    # active pass and saved plates
+//   node run.mjs read-twice              # read, then read again on the kept login, as the app does
 //   node run.mjs activate PLATE          # cancel any other pass, create PLATE's
 //   node run.mjs add PLATE NAME          # save a new plate (does not create a pass)
 //   --dry-run                            # fill the forms, stop before the last click
@@ -33,7 +34,15 @@ if (process.env.PASS10X_CHROMIUM) opts.executablePath = process.env.PASS10X_CHRO
 if (process.env.HTTPS_PROXY) opts.proxy = { server: process.env.HTTPS_PROXY };
 const browser = await chromium.launch(opts);
 // A phone-sized page, as in the app.
-const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true });
+// Look like the app's WKWebView: an iPhone user agent (WKWebView's has no
+// "Safari/" token) and navigator.platform "iPhone", which the site checks.
+const page = await browser.newPage({
+  viewport: { width: 390, height: 844 },
+  isMobile: true,
+  hasTouch: true,
+  userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148',
+});
+await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'platform', { get: () => 'iPhone' }));
 await page.addInitScript(script);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -119,9 +128,10 @@ const [cmd, ...rest] = process.argv.slice(2).filter((a) => a !== '--dry-run');
 try {
   let out;
   if (cmd === 'read') out = await read();
+  else if (cmd === 'read-twice') { await read(); out = await read(); }
   else if (cmd === 'activate') out = await activate(rest[0], dryRun);
   else if (cmd === 'add') out = await add(rest[0], rest.slice(1).join(' '), dryRun);
-  else throw new Error('usage: run.mjs read | activate PLATE | add PLATE NAME');
+  else throw new Error('usage: run.mjs read | read-twice | activate PLATE | add PLATE NAME');
   console.log(JSON.stringify(out, null, 2));
 } catch (e) {
   console.error(e.message);
