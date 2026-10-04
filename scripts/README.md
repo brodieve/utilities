@@ -137,11 +137,16 @@ The login has to go through the home page: pick the building, choose
 **RESIDENT**, then log in. Opening `/signin` directly skips the RESIDENT
 choice and Pass10x refuses the login.
 
+Passes are made the way the app intends: **Manage Parking** lists
+**Previously Parked Plates**, and each plate's **Create** button opens the pass
+form filled in with that plate and its saved name. A plate that is not saved
+yet is added first with **Setup a Visitor Pass**. Saved plates are only ever
+added, never edited or deleted; the only button clicked in a saved plate's row
+is **Create**, never the trash or edit icons next to it.
+
 A suite may hold only one 24 hour visitor pass at a time, so `create` stops if
 another plate has one, unless `--replace` is given to cancel it first.
-Cancelling only touches the **Active Visitor Parking Passes** table; the
-saved **Previously Parked Plates** list, which deletes plates with the same
-trash icon, is never clicked.
+Cancelling only touches the **Active Visitor Parking Passes** table.
 
 ### Install
 
@@ -157,16 +162,18 @@ security add-generic-password -s pass10x -a YOUR_SUITE -w   # prompts for the pa
 
 ```sh
 export PASS10X_SUITE=YOUR_SUITE
-guestpass create ABC123 "Pat Guest"         # 24 hour pass
-guestpass create ABC123 "Pat Guest" --replace
-guestpass create ABC123 --dry-run           # fill the form, do not submit
-guestpass list
+guestpass create ABC123 "Pat Guest"         # saves ABC123 if new, then a 24 hour pass
+guestpass create ABC123                     # saved plate, uses its saved name
+guestpass create ABC123 --replace           # cancel the suite's active pass first
+guestpass create ABC123 --dry-run           # fill the forms, do not save or submit
+guestpass list                              # active visitor passes
+guestpass plates                            # saved plates
 guestpass cancel ABC123
 ```
 
 ```
   --replace    cancel the suite's active visitor pass first (one per suite)
-  --dry-run    fill in the form and stop before submitting
+  --dry-run    fill in the forms and stop before saving or submitting
   --phone N    10 digit cell number for the expiry text
   --headed     show the browser
   -h, --help   show help

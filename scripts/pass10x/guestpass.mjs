@@ -5,10 +5,11 @@
 // Create, list and cancel visitor parking passes on pass10x.com by driving
 // the resident web app in a headless Chromium.
 //
-//   guestpass create ABC123 "Pat Guest"     # 24 hour pass for ABC123
+//   guestpass create ABC123 "Pat Guest"     # save ABC123 if new, then a 24 hour pass
 //   guestpass create ABC123 --replace       # cancel the suite's active pass first
-//   guestpass create ABC123 --dry-run       # fill the form, do not submit
+//   guestpass create ABC123 --dry-run       # fill the forms, do not save or submit
 //   guestpass list                          # active visitor passes
+//   guestpass plates                        # saved visitor plates
 //   guestpass cancel ABC123                 # cancel the active pass for ABC123
 //
 // How the pieces fit:
@@ -17,12 +18,16 @@
 //     does: pick the building on the home page, choose RESIDENT, log in, then
 //     use the dashboard. Going straight to /signin skips the RESIDENT choice
 //     and the login is refused, so always start from the home page.
+//   - Passes are made from saved plates, as in the app: Manage Parking lists
+//     "Previously Parked Plates", each with a Create button that opens the
+//     pass form filled in with that plate and its saved name. A plate that is
+//     not saved yet is added first with "Setup a Visitor Pass".
 //   - A suite may hold only one 24 hour visitor pass at a time. create
 //     refuses when another plate's pass is active unless --replace is given.
-//   - Cancelling only ever touches the "Active Visitor Parking Passes" table
-//     (the one with an "Extend Time" column). The saved "Previously Parked
-//     Plates" list uses the same trash icon to delete a plate; this script
-//     never clicks anything in it.
+//   - Saved plates are only ever added, never edited or deleted. Their rows
+//     carry a trash icon next to Create; the only thing clicked in a row is
+//     the button labelled Create. Cancelling only touches the "Active Visitor
+//     Parking Passes" table (the one with an "Extend Time" column).
 //
 // Credentials come from the environment, or the macOS Keychain:
 //
@@ -43,10 +48,14 @@ const PASS_TYPE = '24 Hour Visitor Pass';
 const usage = `usage:
   guestpass create PLATE [NAME] [--phone NUMBER] [--replace] [--dry-run]
   guestpass list
+  guestpass plates
   guestpass cancel PLATE
 
+  NAME is saved with a new plate; for a saved plate it overrides the saved
+  name on this pass only.
+
   --replace    cancel the suite's active visitor pass first (one per suite)
-  --dry-run    fill in the form and stop before submitting
+  --dry-run    fill in the forms and stop before saving or submitting
   --phone N    10 digit cell number for the expiry text
   --headed     show the browser
   -h, --help   show help`;
@@ -163,37 +172,91 @@ async function cancelPass(page, plate) {
   if (still) die(`pass for ${plate} is still active after cancelling`);
 }
 
-async function createPass(page, { plate, name, phone, dryRun }) {
-  await openDashboard(page);
-  await page.getByRole('button', { name: 'CREATE / SEND VISITOR PASSES' }).click();
-  const form = page.locator('form');
-  await form.getByRole('button', { name: 'Create Visitor Parking Pass' }).waitFor();
+// The saved plates are not a table: each row is a div holding the plate in a
+// <p>, a "Create" button, and unlabelled trash and edit icons.
+function savedRow(page, plate) {
+  return page.locator(`xpath=//p[normalize-space()='${plate}']/ancestor::div[.//button[normalize-space()='Create']][1]`);
+}
 
+async function savedPlates(page) {
+  await openManage(page);
+  return page.locator('xpath=//button[normalize-space()="Create"]').evaluateAll((buttons) => buttons.map((b) => {
+    let row = b.parentElement;
+    while (row && row.querySelectorAll('p').length < 2) row = row.parentElement;
+    return row ? row.querySelector('p').innerText.trim() : '';
+  }).filter(Boolean));
+}
+
+// "Setup a Visitor Pass" on Manage Parking: Plate, Name, Cell #, Save Visitor.
+function setupInput(page, label) {
+  return page.locator(`xpath=//label[normalize-space()='${label}']/following-sibling::div//input`);
+}
+
+async function saveVisitor(page, { plate, name, phone, dryRun }) {
+  await openManage(page);
+  await setupInput(page, 'Plate').fill(plate);
+  if (name) await setupInput(page, 'Name').fill(name);
+  if (phone) await setupInput(page, 'Cell #').fill(phone);
+  if (dryRun) {
+    await page.screenshot({ path: 'guestpass-dry-run.png', fullPage: true });
+    console.log(`dry run: ${plate} is not saved; filled Setup a Visitor Pass, not saved (guestpass-dry-run.png)`);
+    return false;
+  }
+  let alertText = '';
+  page.once('dialog', async (d) => { alertText = d.message(); await d.accept(); });
+  await page.locator('xpath=//button[normalize-space()="Save Visitor"]').click();
+  await page.waitForLoadState('networkidle');
+  if (!(await savedPlates(page)).includes(plate)) {
+    die(`could not save ${plate}: ${alertText || 'no message from the site'}`);
+  }
+  return true;
+}
+
+async function createFromSaved(page, { plate, name, phone, dryRun }) {
+  await openManage(page);
+  const row = savedRow(page, plate);
+  if (await row.count() !== 1) die(`no single saved plate ${plate}`);
+  const create = row.locator('xpath=.//button[normalize-space()="Create"]');
+  if (await create.count() !== 1) die(`saved plate ${plate} has no single Create button`);
+  await create.click();
+
+  await page.waitForURL('**/sendpasstext');
+  const form = page.locator('form');
+  const submit = form.getByRole('button', { name: 'Create Visitor Parking Pass' });
+  await submit.waitFor();
   const plateInput = form.getByRole('combobox').locator('input');
-  await plateInput.fill(plate);
-  await plateInput.press('Tab');
+  await page.waitForFunction((el) => el.value !== '', await plateInput.elementHandle());
+  const shownPlate = await plateInput.inputValue();
+  if (normPlate(shownPlate) !== plate) die(`pass form opened with ${shownPlate}, not ${plate}`);
   await form.locator('select').selectOption(PASS_TYPE);
-  if (name) await form.locator('input[name=name]').fill(name);
+  const nameInput = form.locator('input[name=name]');
+  if (name && (await nameInput.inputValue()) !== name) await nameInput.fill(name);
   if (phone) await form.locator('input[name=phoneno]').fill(phone);
+  const passName = await nameInput.inputValue();
 
   if (dryRun) {
     await page.screenshot({ path: 'guestpass-dry-run.png', fullPage: true });
-    console.log('dry run: form filled, not submitted (guestpass-dry-run.png)');
+    console.log('dry run: pass form filled from the saved plate, not submitted (guestpass-dry-run.png)');
     return;
   }
 
   let alertText = '';
   page.once('dialog', async (d) => { alertText = d.message(); await d.accept(); });
-  await form.getByRole('button', { name: 'Create Visitor Parking Pass' }).click();
-  await page.waitForLoadState('networkidle');
-  await page.waitForTimeout(3000);
+  await submit.click();
+  const ok = await page.getByText('Visitor Pass Created Successfully').waitFor({ timeout: 20000 })
+    .then(() => true, () => false);
+  if (!ok) die(`pass for ${plate} was not created: ${alertText || 'no message from the site'}`);
 
-  const created = (await activePasses(page)).find((p) => normPlate(p.plate) === plate);
-  if (!created) {
-    const shown = alertText || 'no message from the site';
-    die(`pass for ${plate} was not created: ${shown}`);
+  const pass = (await activePasses(page)).find((p) => normPlate(p.plate) === plate);
+  return pass || { plate, name: passName, start: '?', end: '?' };
+}
+
+async function createPass(page, opts) {
+  if (!(await savedPlates(page)).includes(opts.plate)) {
+    if (!(await saveVisitor(page, opts))) return;
+    console.log(`saved ${opts.plate}${opts.name ? ` (${opts.name})` : ''}`);
   }
-  return created;
+  return createFromSaved(page, opts);
 }
 
 function show(pass) {
@@ -212,6 +275,9 @@ async function main() {
     if (command === 'list') {
       const passes = await activePasses(page);
       console.log(passes.length ? passes.map(show).join('\n') : 'no active visitor passes');
+    } else if (command === 'plates') {
+      const plates = await savedPlates(page);
+      console.log(plates.length ? plates.join('\n') : 'no saved plates');
     } else if (command === 'cancel') {
       if (!rest[0]) die(usage);
       const plate = normPlate(rest[0]);
