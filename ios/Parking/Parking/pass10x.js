@@ -136,12 +136,14 @@
     return t ? [...t.querySelectorAll('tbody tr')] : [];
   }
 
+  function readPass(r) {
+    // [delete button, name, plate, cell, start, end, extend button]
+    const cells = [...r.querySelectorAll('th, td')].map(text);
+    return { name: cells[1], plate: cells[2], phone: cells[3], start: cells[4], end: cells[5] };
+  }
+
   function readActive() {
-    return activeRows().map((r) => {
-      // [delete button, name, plate, cell, start, end, extend button]
-      const cells = [...r.querySelectorAll('th, td')].map(text);
-      return { name: cells[1], plate: cells[2], phone: cells[3], start: cells[4], end: cells[5] };
-    });
+    return activeRows().map(readPass);
   }
 
   // Each saved plate is a block of divs: a chevron, the plate in a <p>, the
@@ -194,12 +196,15 @@
     return { active: readActive(), saved };
   }
 
-  async function cancelPass({ plate }) {
+  // Active Visitor Parking Passes: press one pass's delete button and confirm.
+  // Rows are matched by the same cells readActive() reads the plate from.
+  async function cancelPass({ plate, dryRun }) {
     await waitForManage();
-    const rows = activeRows().filter((r) => norm(text(r.querySelectorAll('td')[1])) === norm(plate));
+    const rows = activeRows().filter((r) => norm(readPass(r).plate) === norm(plate));
     if (rows.length !== 1) throw new Error(`expected one active pass for ${plate}, found ${rows.length}`);
     const del = rows[0].querySelector('button[aria-label="delete"]');
     if (!del) throw new Error(`no cancel button on the pass for ${plate}`);
+    if (dryRun) return { dryRun: true, ...readPass(rows[0]), button: 'delete' };
     messages.length = 0;
     del.click();
     // The site asks "Delete This Parking Pass?" in its own dialog. All of

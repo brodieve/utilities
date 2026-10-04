@@ -10,6 +10,7 @@
 //   node run.mjs activate PLATE          # cancel any other pass, create PLATE's
 //   node run.mjs add PLATE NAME          # save a new plate (does not create a pass)
 //   node run.mjs remove PLATE            # delete a saved plate with its trash icon
+//   node run.mjs cancel PLATE            # cancel PLATE's active pass (revoke in the app)
 //   --dry-run                            # fill the forms, stop before the last click
 //
 // Uses PASS10X_BUILDING (default "Landmark 33"), PASS10X_SUITE and
@@ -121,6 +122,13 @@ async function remove(plate, dryRun) {
   return (await step('readParking')).saved;
 }
 
+async function cancel(plate, dryRun) {
+  await openManage();
+  const found = await step('cancelPass', { plate, dryRun });
+  if (dryRun) return found;
+  return (await step('readParking')).active;
+}
+
 const norm = (s) => (s || '').replace(/[\s-]/g, '').toUpperCase();
 const dryRun = process.argv.includes('--dry-run');
 const [cmd, ...rest] = process.argv.slice(2).filter((a) => a !== '--dry-run');
@@ -130,7 +138,8 @@ try {
   else if (cmd === 'activate') out = await activate(rest[0], dryRun);
   else if (cmd === 'add') out = await add(rest[0], rest.slice(1).join(' '), dryRun);
   else if (cmd === 'remove') out = await remove(rest[0], dryRun);
-  else throw new Error('usage: run.mjs read | activate PLATE | add PLATE NAME | remove PLATE');
+  else if (cmd === 'cancel') out = await cancel(rest[0], dryRun);
+  else throw new Error('usage: run.mjs read | activate PLATE | add PLATE NAME | remove PLATE | cancel PLATE');
   console.log(JSON.stringify(out, null, 2));
 } catch (e) {
   console.error(e.message);
