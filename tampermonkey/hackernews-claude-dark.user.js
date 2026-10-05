@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Hacker News Claude dark theme
 // @namespace    https://github.com/brodieve/utilities
-// @version      1.0.1
+// @version      1.0.2
 // @description  Dark theme for news.ycombinator.com using Claude's dark mode palette
 // @author       Brodie
 // @homepageURL  https://github.com/brodieve/utilities
@@ -17,12 +17,6 @@
 
 (function () {
     'use strict';
-
-    // Vote arrows are an SVG with a hard-coded #999 fill, so swap in recoloured copies.
-    const arrow = (fill) =>
-        "url(\"data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20height='32'" +
-        "%20viewBox='0%200%2032%2016'%20width='32'%3E%3Cpath%20d='m2%2027%2014-29%2014%2029z'" +
-        "%20fill='%23" + fill + "'/%3E%3C/svg%3E\")";
 
     const css = `
 /* ---------- palette ---------- */
@@ -118,8 +112,15 @@ hr { border: 0 !important; border-top: 1px solid var(--cd-border) !important; }
 .morelink:hover { text-decoration: underline !important; }
 
 /* ---------- vote arrows ---------- */
-.votearrow { background-image: ${arrow('8f8b81')} !important; }
-.votelinks a:hover .votearrow { background-image: ${arrow('d97757')} !important; }
+/* The arrow is an SVG with a hard-coded #999 fill. HN's CSP (img-src 'self')
+   blocks data: URIs, so rather than swap in a recoloured copy, use HN's own
+   triangle.svg as a mask and paint the colour through it. */
+.votearrow {
+    background: var(--cd-muted) !important;
+    -webkit-mask: url("/triangle.svg") no-repeat 0 0 / 10px 10px !important;
+            mask: url("/triangle.svg") no-repeat 0 0 / 10px 10px !important;
+}
+.votelinks a:hover .votearrow { background: var(--cd-accent) !important; }
 
 /* ---------- comments ---------- */
 .toptext { color: var(--cd-text-2) !important; }
