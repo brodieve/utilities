@@ -25,6 +25,9 @@
 #     lease ends, and to whatever disablesleep was before the first one.
 #
 # POSIX sh, macOS only.
+# 
+# v1.0 - brodieve - initial
+#
 
 set -eu
 
