@@ -126,3 +126,43 @@ nosleep -c 'make && say done' # one quoted argument runs in $SHELL
 - The guard is this script run as root, so anything that can write to it can
   run as root the next time you start a session. Keep it somewhere only you
   can write.
+
+## root.sh
+
+Asks [Privileges](https://github.com/SAP/macOS-enterprise-privileges) for
+admin rights, with a one-sentence Buddhist, philosophical reason of 20 words
+or less written by Claude Haiku. Each reason draws on a teaching picked at
+random (impermanence, non-self, the Middle Way, …); give it a purpose and the
+reason is written around that too. macOS-only.
+
+### Install
+
+Symlink it onto your PATH as `root`, so edits here take effect at once:
+
+```sh
+ln -s "$PWD/scripts/root.sh" ~/.local/bin/root
+```
+
+### Usage
+
+```
+root                    # admin rights, with a generated reason
+root updating Homebrew  # the reason is written around this
+root -n                 # print a reason without asking for rights
+root -r                 # hand admin rights back
+```
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ROOT_MODEL` | `claude-haiku-5-5` | The model that writes the reason. |
+
+### Notes
+
+- The `claude -p` call carries no tools, MCP servers, skills, settings,
+  `CLAUDE.md` or saved session, and runs at low effort, so Haiku answers
+  without thinking: about 650 input tokens and 1–3 seconds. `--bare` would
+  trim more, but it only takes `ANTHROPIC_API_KEY`, not a claude.ai login.
+- If `claude` is missing, fails, or twice gives something that is not 3–20
+  words, a fixed reason is used instead.
+- Privileges sends the reason, with your email and serial number, to remote
+  logging, so it is read by more than you.
