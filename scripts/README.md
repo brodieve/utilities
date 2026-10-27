@@ -169,10 +169,10 @@ root -r                 # hand admin rights back
 
 ## obsidian-sync-guard.sh
 
-Keeps Obsidian Sync turned on and connected in a vault on a Mac. If the Sync
-core plugin is turned off, it is turned back on; if Sync loses its remote
-vault, it is reconnected from a copy of its config saved in the Keychain.
-macOS-only.
+Keeps Obsidian Sync turned on and connected in the vaults it guards on a Mac.
+If the Sync core plugin is turned off in one, it is turned back on; if Sync
+loses its remote vault, it is reconnected from a copy of its config saved in
+the Keychain. macOS-only.
 
 Turning the plugin back on is not enough by itself. When a vault opens with
 Sync off, Obsidian deletes the vault's IndexedDB database `<vault id>-sync`
@@ -187,32 +187,38 @@ Advanced. The guard needs it to save the config, to restore it, and to turn
 Sync back on in an Obsidian that is already running.
 
 Symlink the script onto your PATH as `obsidian-sync-guard`, so edits here take
-effect at once. Then, with the vault open and Sync connected:
+effect at once. Then install each vault to guard, with the vault open and
+Sync connected:
 
 ```sh
 ln -s "$PWD/scripts/obsidian-sync-guard.sh" ~/.local/bin/obsidian-sync-guard
-obsidian-sync-guard install
+obsidian-sync-guard -v Notes install
+obsidian-sync-guard -v Work install
 ```
 
-`install` saves the config and starts a LaunchAgent,
-`com.brodieve.obsidian-sync-guard`. It checks at login, whenever
+`install` saves the vault's config and starts a LaunchAgent for it,
+`com.brodieve.obsidian-sync-guard.<hash of the vault's path>`, leaving any
+other vault's alone. Each checks its vault at login, whenever the vault's
 `core-plugins.json` or Obsidian's vault list changes, and every 5 minutes.
+With only one vault in Obsidian, `-v` can be left out.
 
 ### Usage
 
 ```
-obsidian-sync-guard install            # save the Sync config and guard the vault
-obsidian-sync-guard status             # how Sync and the guard stand
-obsidian-sync-guard save               # save the Sync config now
-obsidian-sync-guard check              # check once, as the agent does
-obsidian-sync-guard uninstall          # stop guarding
-obsidian-sync-guard -v Notes install   # pick the vault, when Obsidian has several
-obsidian-sync-guard -c .config install # name the vault's config folder
+obsidian-sync-guard -v Notes install   # save Notes' Sync config and guard it
+obsidian-sync-guard status             # how Sync and the guard stand, in each
+obsidian-sync-guard save               # save each one's Sync config now
+obsidian-sync-guard check              # check each once, as the agents do
+obsidian-sync-guard -v Notes status    # just Notes, guarded or not
+obsidian-sync-guard -v Notes uninstall # stop guarding Notes
+obsidian-sync-guard uninstall          # stop guarding every vault
+obsidian-sync-guard -v Notes -c .config install # name the vault's config folder
 ```
 
 ```
-  -v, --vault VAULT   the vault, by path or folder name; needed only when
-                      Obsidian has more than one
+  -v, --vault VAULT   the vault, by path or folder name; without it, install
+                      takes Obsidian's only vault, and the other commands
+                      every guarded vault, or Obsidian's only one if none is
   -c, --config-folder FOLDER
                       the vault's config folder, such as .obsidian; found on
                       its own: Obsidian is asked, or else it is the one
@@ -227,13 +233,13 @@ obsidian-sync-guard -c .config install # name the vault's config folder
 ### How it works
 
 - **The switch.** `core-plugins.json`, in the vault's config folder, records
-  which core plugins are on. The agent watches it and sets `"sync"` back to
-  `true` as soon as anything turns it off, whether Obsidian is running or
-  not, so the vault next opens with Sync on and the database is kept. The
-  folder is `.obsidian` unless Obsidian on this Mac is set to use another,
-  in Settings → Files and links → Override config folder. `install` asks
-  Obsidian which, and the agent watches that one. The switch is all of Sync
-  that is in the folder; Sync's config is in the database.
+  which core plugins are on. The vault's agent watches it and sets `"sync"`
+  back to `true` as soon as anything turns it off, whether Obsidian is
+  running or not, so the vault next opens with Sync on and the database is
+  kept. The folder is `.obsidian` unless Obsidian on this Mac is set to use
+  another, in Settings → Files and links → Override config folder. `install`
+  asks Obsidian which, and the agent watches that one. The switch is all of
+  Sync that is in the folder; Sync's config is in the database.
 - **The running app.** Through `obsidian eval`, the guard runs a short script
   inside the vault's window. It turns the Sync plugin back on if it is off.
   If the database has no remote vault, it writes the saved config back and
@@ -252,8 +258,8 @@ obsidian-sync-guard -c .config install # name the vault's config folder
 
 - The first sync after a restore runs as it does after connecting by hand:
   Sync compares the whole vault with the remote one from scratch.
-- To turn Sync off or disconnect it on purpose, run `uninstall` first, or
-  the guard undoes it.
+- To turn Sync off or disconnect it on purpose, run `-v VAULT uninstall`
+  first, or the guard undoes it.
 - Without the command line interface, only `core-plugins.json` is guarded.
   If the vault still opens with Sync off, the connection is lost and has to
   be set up again by hand.
@@ -263,6 +269,8 @@ obsidian-sync-guard -c .config install # name the vault's config folder
   Once the vault is opened again it has a new id. The guard finds it by
   path and restores the config into it. An overridden config folder is
   forgotten too, so Obsidian opens the vault with `.obsidian`; see below.
+  Until then, `status` and `check` report the vault missing, and
+  `uninstall` takes it by the path it had, not by name.
 - If Obsidian is using another config folder than the one the guard was
   installed with, the guard leaves Sync alone and logs why: turned on
   there, Sync would sync that folder's settings instead, from scratch. Set
@@ -273,12 +281,15 @@ obsidian-sync-guard -c .config install # name the vault's config folder
   open the folder, or refuse without asking. Unless it is allowed, the
   agent cannot fix `core-plugins.json`. Restoring through Obsidian still
   works.
-- One vault at a time: `install -v` with another vault moves the guard to
-  that vault.
+- Each vault is guarded on its own, by its own agent, so one vault opening
+  or failing does not hold up another. An agent installed by v1.0,
+  `com.brodieve.obsidian-sync-guard` with no hash, still works and shows in
+  `status`; installing its vault again moves it to the new label.
 - It relies on Obsidian internals as of 1.14.5: `app.internalPlugins` and
   the layout of Sync's IndexedDB record. If an update changes them, the
   guard logs errors rather than restoring.
-- Only what it does gets logged, to `~/Library/Logs/obsidian-sync-guard.log`.
+- Only what it does gets logged, to `~/Library/Logs/obsidian-sync-guard.log`,
+  one log for every vault, each line naming its vault.
   `uninstall` leaves the saved config in the Keychain.
   `security delete-generic-password -s obsidian-sync-guard -a VAULT_PATH`
   deletes it.
