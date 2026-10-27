@@ -2,15 +2,15 @@
 #
 # obsidian-sync-guard.sh
 #
-# Keep Obsidian Sync turned on and connected in a vault on this Mac. If the
-# Sync core plugin is turned off it is turned back on, and if its link to the
-# remote vault is lost it is restored from a copy saved in the Keychain.
-# Install it on PATH as `obsidian-sync-guard`.
+# Keep Obsidian Sync turned on and connected in the vaults it guards on this
+# Mac. If the Sync core plugin is turned off it is turned back on, and if its
+# link to the remote vault is lost it is restored from a copy saved in the
+# Keychain. Install it on PATH as `obsidian-sync-guard`.
 #
-#   obsidian-sync-guard install     # save the Sync config and guard it
-#   obsidian-sync-guard status      # how Sync and the guard stand
-#   obsidian-sync-guard save        # save the Sync config again now
-#   obsidian-sync-guard uninstall   # stop guarding
+#   obsidian-sync-guard -v Notes install   # save a vault's Sync config and guard it
+#   obsidian-sync-guard status             # how Sync and the guard stand in each
+#   obsidian-sync-guard save               # save each one's Sync config again now
+#   obsidian-sync-guard uninstall          # stop guarding them all
 #
 # Why the connection as well as the switch: when a vault opens with the Sync
 # plugin off, Obsidian deletes the vault's IndexedDB database
@@ -21,8 +21,9 @@
 # How the pieces fit:
 #
 #   - core-plugins.json, in the vault's config folder, records which core
-#     plugins are on. A LaunchAgent watches it and turns "sync" back on as
-#     soon as anything turns it off, so the vault next opens with Sync on.
+#     plugins are on. Each guarded vault has a LaunchAgent of its own, which
+#     watches it and turns "sync" back on as soon as anything turns it off,
+#     so the vault next opens with Sync on.
 #     The folder is .obsidian unless Obsidian on this Mac is set to use
 #     another (Settings > Files and links > Override config folder). Only
 #     the switch is in it: Sync's config is not.
@@ -40,12 +41,16 @@
 # macOS only.
 #
 # v1.0 - brodieve - initial
+# v1.1 - brodieve - guard several vaults
 #
 
 set -eu
 
+# Each vault's LaunchAgent is labelled LABEL.<hash of the vault's path>.
 LABEL=com.brodieve.obsidian-sync-guard
-PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+AGENTS="$HOME/Library/LaunchAgents"
+DOMAIN="gui/$(id -u)"
+# Every vault's agent logs here.
 LOG="$HOME/Library/Logs/obsidian-sync-guard.log"
 KEYCHAIN_SERVICE=obsidian-sync-guard
 OBSIDIAN_APP=/Applications/Obsidian.app
@@ -61,13 +66,14 @@ usage() {
     cat <<'EOF'
 Usage: obsidian-sync-guard [-v VAULT] [-c FOLDER] COMMAND
 
-Keep Obsidian Sync turned on and connected in a vault. If the Sync core
-plugin is turned off it is turned back on, and if its link to the remote
-vault is lost it is restored from a copy saved in the Keychain.
+Keep Obsidian Sync turned on and connected in the vaults it guards. If the
+Sync core plugin is turned off it is turned back on, and if its link to the
+remote vault is lost it is restored from a copy saved in the Keychain.
 
 Commands:
-  install     Save the Sync config and guard the vault from now on, at
-              login too, with a LaunchAgent.
+  install     Save the vault's Sync config and guard it from now on, at
+              login too, with a LaunchAgent. Install each vault to guard;
+              the others stay guarded.
   uninstall   Stop guarding. The saved config stays in the Keychain.
   status      Show how Sync and the guard stand.
   save        Save the Sync config now. The guard also refreshes it
@@ -76,8 +82,9 @@ Commands:
               runs this.
 
 Options:
-  -v, --vault VAULT   The vault, by path or folder name. Needed only when
-                      Obsidian has more than one.
+  -v, --vault VAULT   The vault, by path or folder name. Without it, install
+                      takes Obsidian's only vault, and the other commands
+                      every guarded vault, or Obsidian's only one if none is.
   -c, --config-folder FOLDER
                       The vault's config folder, such as .obsidian. Found on
                       its own: Obsidian is asked, or else it is the one
@@ -91,21 +98,23 @@ core-plugins.json is guarded, which takes effect when the vault next opens.
 
 If Obsidian is using another config folder than the one the guard was set
 up with, the guard leaves Sync alone there, as Sync would sync the wrong
-folder's settings. Changed it on purpose? Install again.
+folder's settings. Changed it on purpose? Install that vault again.
 
-Turning Sync off or disconnecting it on purpose? Uninstall first, or the
-guard will undo it.
+Turning Sync off or disconnecting it on purpose? Uninstall that vault
+first, or the guard will undo it.
 
 Environment:
   OBSIDIAN_CLI   Obsidian's command line tool (default: found on its own)
 EOF
 }
 
+# TAG names the vault, where there may be several to tell apart: in the log,
+# which every vault's agent writes to, and when a command acts on them all.
 note() {
     if [ -t 2 ]; then
-        printf 'obsidian-sync-guard: %s\n' "$*" >&2
+        printf 'obsidian-sync-guard: %s%s\n' "$TAG" "$*" >&2
     else
-        printf '%s obsidian-sync-guard: %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >&2
+        printf '%s obsidian-sync-guard: %s%s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$TAG" "$*" >&2
     fi
 }
 die()         { note "$*"; exit 1; }
@@ -459,6 +468,81 @@ save_config() {
     [ "$dir" = "$CONFIG_DIR" ] || note "Obsidian is using $dir as the config folder, not $CONFIG_DIR"
 }
 
+# -------------------------------------------------------- vaults and guards
+
+# Look up the vault Obsidian knows by path or folder name $1, or its only
+# vault if $1 is empty, setting VAULT_ID, VAULT_PATH, VAULT_NAME, VAULT_OPEN
+# and CLI_ON. Fail, saying why, if there is no such vault.
+find_vault() {
+    query=$1
+    if [ -n "$query" ] && [ -d "$query" ]; then
+        query=$(CDPATH='' cd -- "$query" && pwd)
+    fi
+    info=$(vault_info "$query") || { note "could not read $OBSIDIAN_CONFIG"; return 1; }
+    IFS=$tab read -r result VAULT_ID VAULT_PATH VAULT_OPEN CLI_ON <<EOF
+$info
+EOF
+    [ "$result" = ok ] || { note "$VAULT_ID"; return 1; }
+    VAULT_NAME=${VAULT_PATH##*/}
+    if [ ! -t 2 ] || [ "$MANY" = 1 ]; then TAG="$VAULT_NAME: "; fi
+}
+
+# Print the label of the vault's LaunchAgent.
+vault_label() {
+    printf '%s.%s\n' "$LABEL" "$(printf '%s' "$VAULT_PATH" | shasum | cut -c 1-8)"
+}
+
+# Print, tab-separated, the plist, vault path and config folder of each
+# vault's LaunchAgent, read from the ProgramArguments plist() writes, in
+# order of vault path. v1.0's single agent, labelled LABEL alone, is one of
+# them, until its vault is installed again.
+guards() {
+    for file in "$AGENTS/$LABEL.plist" "$AGENTS/$LABEL".*.plist; do
+        [ -f "$file" ] || continue
+        vault=$(plutil -extract ProgramArguments.3 raw -o - "$file" 2>/dev/null) || continue
+        dir=$(plutil -extract ProgramArguments.5 raw -o - "$file" 2>/dev/null) || continue
+        printf '%s\t%s\t%s\n' "$file" "$vault" "$dir"
+    done | sort -t "$tab" -k 2,2
+}
+
+# Set GUARD to the plist of the vault's LaunchAgent and GUARD_DIR to the
+# config folder it guards. Fail if the vault is not guarded.
+find_guard() {
+    while IFS=$tab read -r file vault dir; do
+        [ -n "$file" ] && [ "$vault" = "$VAULT_PATH" ] || continue
+        GUARD=$file GUARD_DIR=$dir
+        return 0
+    done <<EOF
+$(guards)
+EOF
+    return 1
+}
+
+# Stop LaunchAgent $1 if it is loaded. bootout returns before the job is
+# gone, and bootstrap fails until it is, so wait for that.
+unload() {
+    launchctl bootout "$DOMAIN/$1" 2>/dev/null || true
+    tries=0
+    while launchctl print "$DOMAIN/$1" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
+        tries=$((tries + 1))
+        sleep 0.1
+    done
+}
+
+# Stop and delete the LaunchAgents guarding vault path $1, or every vault if
+# $1 is empty, printing the path of each vault they guarded.
+remove_guards() {
+    while IFS=$tab read -r file vault dir; do
+        [ -n "$file" ] || continue
+        [ -z "$1" ] || [ "$vault" = "$1" ] || continue
+        unload "$(basename "$file" .plist)"
+        rm -f "$file"
+        printf '%s\n' "$vault"
+    done <<EOF
+$(guards)
+EOF
+}
+
 # --------------------------------------------------------------- commands
 
 cmd_check() {
@@ -476,7 +560,7 @@ cmd_check() {
     case "$reply" in
         elsewhere*)
             note "Obsidian is using $(reply_field dir "$reply") as $VAULT_NAME's config folder, not $CONFIG_DIR, so Sync was left alone"
-            note "to guard that folder, run obsidian-sync-guard install again; to go back to $CONFIG_DIR, set it in Settings > Files and links > Override config folder"
+            note "to guard that folder, run obsidian-sync-guard -v \"$VAULT_PATH\" install; to go back to $CONFIG_DIR, set it in Settings > Files and links > Override config folder"
             return 1 ;;
     esac
     set -f
@@ -545,20 +629,21 @@ cmd_status() {
         row saved 'nothing yet'
     fi
 
-    if ! launchctl print "gui/$(id -u)/$LABEL" >/dev/null 2>&1; then
-        if [ -f "$PLIST" ]; then row guard "installed but not running: $PLIST"; else row guard 'not installed'; fi
-    elif ! grep -qF "<string>$(xml_escape "$VAULT_PATH")</string>" "$PLIST" 2>/dev/null; then
-        row guard "running for another vault: $PLIST"
-    elif grep -qF "<string>$(xml_escape "$CONFIG_DIR")</string>" "$PLIST"; then
+    if ! find_guard; then
+        row guard 'not installed'
+    elif ! launchctl print "$DOMAIN/$(basename "$GUARD" .plist)" >/dev/null 2>&1; then
+        row guard "installed but not running: $GUARD"
+    elif [ "$GUARD_DIR" = "$CONFIG_DIR" ]; then
         row guard "running, logging to $LOG"
     else
         row guard "running for another config folder; install again to guard $CONFIG_DIR"
     fi
 }
 
-# Print the LaunchAgent: a check at login, whenever core-plugins.json or
-# Obsidian's vault list changes, which it does as a vault opens, and every
-# INTERVAL seconds besides.
+# Print the vault's LaunchAgent, labelled $2, running script $1: a check at
+# login, whenever core-plugins.json or Obsidian's vault list changes, which
+# it does as a vault opens, and every INTERVAL seconds besides. guards()
+# reads the vault and config folder back from ProgramArguments, by place.
 plist() {
     cat <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -566,7 +651,7 @@ plist() {
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>$LABEL</string>
+    <string>$2</string>
     <key>ProgramArguments</key>
     <array>
         <string>/bin/sh</string>
@@ -598,7 +683,6 @@ EOF
 cmd_install() {
     here=$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)
     script="$here/$(basename -- "$0")"
-    domain="gui/$(id -u)"
 
     if [ "$CLI_ON" != 1 ]; then
         note "$CLI_OFF; until then, only core-plugins.json is guarded"
@@ -606,26 +690,29 @@ cmd_install() {
         note "the guard saves the config the first time it finds Sync connected in an open vault"
     fi
 
-    mkdir -p "$(dirname "$PLIST")" "$(dirname "$LOG")"
-    plist "$script" >"$PLIST.tmp"
-    mv -f "$PLIST.tmp" "$PLIST"
-
-    launchctl bootout "$domain/$LABEL" 2>/dev/null || true
-    # bootout returns before the job is gone, and bootstrap fails until it is.
-    tries=0
-    while launchctl print "$domain/$LABEL" >/dev/null 2>&1 && [ "$tries" -lt 50 ]; do
-        tries=$((tries + 1))
-        sleep 0.1
-    done
-    launchctl bootstrap "$domain" "$PLIST" || die "launchctl could not load $PLIST"
+    # Whatever agent guards the vault already, this one or v1.0's, makes way.
+    remove_guards "$VAULT_PATH" >/dev/null
+    label=$(vault_label)
+    agent="$AGENTS/$label.plist"
+    mkdir -p "$AGENTS" "$(dirname "$LOG")"
+    plist "$script" "$label" >"$agent.tmp"
+    mv -f "$agent.tmp" "$agent"
+    launchctl bootstrap "$DOMAIN" "$agent" || die "launchctl could not load $agent"
 
     note "guarding $VAULT_PATH, with config folder $CONFIG_DIR; what it does is logged to $LOG"
 }
 
+# Stop guarding vault path VAULT_PATH, or every vault if it is empty.
 cmd_uninstall() {
-    launchctl bootout "gui/$(id -u)/$LABEL" 2>/dev/null || true
-    rm -f "$PLIST"
-    note "stopped guarding; the saved config is still in the Keychain, and"
+    removed=$(remove_guards "$VAULT_PATH")
+    if [ -z "$removed" ]; then
+        note "not guarding ${VAULT_PATH:-any vault}"
+        return 0
+    fi
+    printf '%s\n' "$removed" | while IFS= read -r vault; do
+        note "stopped guarding $vault"
+    done
+    note "the saved config is still in the Keychain, and"
     note "security delete-generic-password -s $KEYCHAIN_SERVICE -a VAULT_PATH deletes it"
 }
 
@@ -634,6 +721,9 @@ cmd_uninstall() {
 COMMAND=''
 VAULT_ARG=''
 CONFIG_ARG=''
+TAG=''
+MANY=0
+CLI=''
 while [ $# -gt 0 ]; do
     case "$1" in
         -h|--help)  usage; exit 0 ;;
@@ -659,8 +749,18 @@ esac
 for tool in osascript security launchctl; do
     have "$tool" || die "$tool not found; obsidian-sync-guard only works on macOS"
 done
+tab=$(printf '\t')
 
 if [ "$COMMAND" = uninstall ]; then
+    VAULT_PATH=''
+    # A vault Obsidian has dropped, as it does one whose folder is missing
+    # when it starts, is still found by the path it had.
+    if [ -n "$VAULT_ARG" ] && ! find_vault "$VAULT_ARG"; then
+        case "$VAULT_ARG" in
+            /*) VAULT_PATH=${VAULT_ARG%/} ;;
+            *)  exit 1 ;;
+        esac
+    fi
     cmd_uninstall
     exit 0
 fi
@@ -668,19 +768,27 @@ fi
 # -------------------------------------------------------------------- vault
 
 [ -f "$OBSIDIAN_CONFIG" ] || die "no vault list at $OBSIDIAN_CONFIG; has Obsidian run on this Mac?"
-query=$VAULT_ARG
-if [ -n "$query" ] && [ -d "$query" ]; then
-    query=$(CDPATH='' cd -- "$query" && pwd)
-fi
-info=$(vault_info "$query") || die "could not read $OBSIDIAN_CONFIG"
-tab=$(printf '\t')
-IFS=$tab read -r result VAULT_ID VAULT_PATH VAULT_OPEN CLI_ON <<EOF
-$info
-EOF
-[ "$result" = ok ] || die "$VAULT_ID"
-VAULT_NAME=${VAULT_PATH##*/}
-CLI=''
 
+# With no vault named, every guarded vault, each with the config folder its
+# agent guards. Each runs in a subshell, so one that fails or exits leaves
+# the rest to run.
+if [ -z "$VAULT_ARG$CONFIG_ARG" ] && [ "$COMMAND" != install ] &&
+   guarded=$(guards) && [ -n "$guarded" ]; then
+    MANY=1
+    rc=0
+    gap=''
+    while IFS=$tab read -r file vault dir; do
+        [ "$COMMAND" != status ] || printf '%s' "$gap"
+        gap='
+'
+        ( find_vault "$vault" && CONFIG_DIR=$dir && "cmd_$COMMAND" ) </dev/null || rc=1
+    done <<EOF
+$guarded
+EOF
+    exit "$rc"
+fi
+
+find_vault "$VAULT_ARG" || exit 1
 CONFIG_DIR=$CONFIG_ARG
 if [ -z "$CONFIG_DIR" ]; then
     CONFIG_DIR=$(find_config_dir) || exit 1
