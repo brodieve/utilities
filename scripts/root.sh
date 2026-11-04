@@ -72,9 +72,9 @@ ask_claude() {
     topic=$(printf '%s\n' "$TOPICS" | awk 'BEGIN { srand() } NF { t[++n] = $0 }
         END { print t[int(rand() * n) + 1] }')
     if [ $# -gt 0 ]; then
-        prompt="Write a Buddhist, philosophical reason a developer needs temporary admin rights on their Mac for: $*. Draw on $topic."
+        prompt="Write a Buddhist, philosophical reason a developer needs temporary admin rights on their Mac for: $*. No more than 12 words. Draw on $topic."
     else
-        prompt="Write a Buddhist, philosophical reason a developer needs temporary admin rights on their Mac. Draw on $topic."
+        prompt="Write a Buddhist, philosophical reason a developer needs temporary admin rights on their Mac. No more than 12 words. Draw on $topic."
     fi
     # Run from / so no project CLAUDE.md or settings can be picked up.
     (cd / && claude -p \
