@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Drudge, Reskinned
 // @namespace    https://github.com/brodieve/utilities
-// @version      1.2.0
-// @description  Modern tech-news styling for drudgereport.com: clean type, card columns, orange accent, light/dark modes.
+// @version      1.2.1
+// @description  Modern tech-news styling for drudgereport.com: clean type, card columns, red accent, light/dark modes.
 // @author       Brodie
 // @homepageURL  https://github.com/brodieve/utilities
 // @supportURL   https://github.com/brodieve/utilities/issues
@@ -88,7 +88,7 @@
 
   addStyle(`
     :root {
-      --dr-accent: #ff4e00;
+      --dr-accent: #f2261b;
       --dr-bg: #f3f3f1; --dr-surface: #ffffff; --dr-text: #161616;
       --dr-muted: #62626a; --dr-rule: #e4e4e0;
       --dr-shadow: 0 1px 2px rgba(0,0,0,.06), 0 2px 8px rgba(0,0,0,.04);
