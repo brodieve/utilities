@@ -1,8 +1,13 @@
 // ==UserScript==
 // @name         Drudge, Reskinned
-// @namespace    drudge-reskin
+// @namespace    https://github.com/brodieve/utilities
 // @version      1.2.0
 // @description  Modern tech-news styling for drudgereport.com: clean type, card columns, orange accent, light/dark modes.
+// @author       Brodie
+// @homepageURL  https://github.com/brodieve/utilities
+// @supportURL   https://github.com/brodieve/utilities/issues
+// @downloadURL  https://raw.githubusercontent.com/brodieve/utilities/main/tampermonkey/drudge-reskin.user.js
+// @updateURL    https://raw.githubusercontent.com/brodieve/utilities/main/tampermonkey/drudge-reskin.user.js
 // @match        *://drudgereport.com/*
 // @match        *://www.drudgereport.com/*
 // @run-at       document-start
